@@ -1,11 +1,19 @@
 package lib
 
-// User represents a user in the system
+// User represents a user in the system (password excluded from JSON)
 type User struct {
 	ID       string `json:"id"`
 	Username string `json:"username"`
 	Email    string `json:"email"`
-	Password string `json:"-"` // Never serialize password
+	Password string `json:"-"` // Never serialize password in responses
+}
+
+// StorageUser is used for database storage (includes password)
+type StorageUser struct {
+	ID       string `json:"id"`
+	Username string `json:"username"`
+	Email    string `json:"email"`
+	Password string `json:"password"`
 }
 
 // RegisterRequest represents the request body for user registration

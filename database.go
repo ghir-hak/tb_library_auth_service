@@ -27,9 +27,16 @@ func getUserByID(id string) (*User, error) {
 		return nil, fmt.Errorf("user not found for ID '%s': %w", id, err)
 	}
 
-	var user User
-	if err := json.Unmarshal(data, &user); err != nil {
+	var storageUser StorageUser
+	if err := json.Unmarshal(data, &storageUser); err != nil {
 		return nil, fmt.Errorf("failed to unmarshal user: %w", err)
+	}
+
+	user := User{
+		ID:       storageUser.ID,
+		Username: storageUser.Username,
+		Email:    storageUser.Email,
+		Password: storageUser.Password,
 	}
 
 	return &user, nil
@@ -49,9 +56,16 @@ func getUserByUsername(username string) (*User, error) {
 		return nil, fmt.Errorf("user not found for username '%s': %w", username, err)
 	}
 
-	var user User
-	if err := json.Unmarshal(data, &user); err != nil {
+	var storageUser StorageUser
+	if err := json.Unmarshal(data, &storageUser); err != nil {
 		return nil, fmt.Errorf("failed to unmarshal user: %w", err)
+	}
+
+	user := User{
+		ID:       storageUser.ID,
+		Username: storageUser.Username,
+		Email:    storageUser.Email,
+		Password: storageUser.Password,
 	}
 
 	return &user, nil
@@ -88,8 +102,16 @@ func saveUser(user User) error {
 		return fmt.Errorf("db connection failed: %w", err)
 	}
 
-	// Serialize user
-	userData, err := json.Marshal(user)
+	// Convert to storage user (includes password)
+	storageUser := StorageUser{
+		ID:       user.ID,
+		Username: user.Username,
+		Email:    user.Email,
+		Password: user.Password,
+	}
+
+	// Serialize storage user (includes password)
+	userData, err := json.Marshal(storageUser)
 	if err != nil {
 		return fmt.Errorf("failed to marshal user: %w", err)
 	}
@@ -126,9 +148,16 @@ func deleteUserFromDB(id string) error {
 		return fmt.Errorf("user not found: %w", err)
 	}
 
-	var user User
-	if err := json.Unmarshal(userData, &user); err != nil {
+	var storageUser StorageUser
+	if err := json.Unmarshal(userData, &storageUser); err != nil {
 		return fmt.Errorf("failed to unmarshal user: %w", err)
+	}
+
+	user := User{
+		ID:       storageUser.ID,
+		Username: storageUser.Username,
+		Email:    storageUser.Email,
+		Password: storageUser.Password,
 	}
 
 	// Delete from all locations
