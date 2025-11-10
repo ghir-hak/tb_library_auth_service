@@ -266,7 +266,6 @@ func test(e event.Event) uint32 {
 	response := map[string]string{
 		"message": "New simplified database structure is active",
 		"version": "2.0",
-		"timestamp": time.Now().Format(time.RFC3339),
 	}
 
 	return sendJSONResponse(h, response)
