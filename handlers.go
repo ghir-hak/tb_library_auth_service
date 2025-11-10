@@ -339,9 +339,204 @@ func test(e event.Event) uint32 {
 	}
 	setCORSHeaders(h)
 
-	response := map[string]string{
-		"message": "New simplified database structure is active",
-		"version": "2.0",
+	// Test password storage and retrieval through actual Taubyte database
+	testPassword := "TestPassword123!@#"
+	testUsername := fmt.Sprintf("testuser_%d", time.Now().UnixNano())
+	testEmail := fmt.Sprintf("test_%d@example.com", time.Now().UnixNano())
+	testID := fmt.Sprintf("test-id-%d", time.Now().UnixNano())
+
+	debugLog := []string{}
+	addLog := func(msg string) {
+		debugLog = append(debugLog, msg)
+		fmt.Printf("TEST: %s\n", msg)
+	}
+
+	addLog("=== Starting Database Password Test ===")
+	addLog(fmt.Sprintf("Test password: %q (len=%d)", testPassword, len(testPassword)))
+	addLog(fmt.Sprintf("Test password bytes (hex): %x", []byte(testPassword)))
+	addLog(fmt.Sprintf("Test username: %q", testUsername))
+	addLog(fmt.Sprintf("Test email: %q", testEmail))
+	addLog(fmt.Sprintf("Test ID: %q", testID))
+
+	// Step 1: Hash the password
+	addLog("\n--- Step 1: Hashing Password ---")
+	hashedPassword, err := hashPassword(testPassword)
+	if err != nil {
+		addLog(fmt.Sprintf("ERROR: Failed to hash password: %v", err))
+		return sendErrorResponse(h, fmt.Sprintf("Failed to hash password: %v", err), 500)
+	}
+	addLog(fmt.Sprintf("Hashed password type: %T", hashedPassword))
+	addLog(fmt.Sprintf("Hashed password value: %q", hashedPassword))
+	addLog(fmt.Sprintf("Hashed password length: %d", len(hashedPassword)))
+	addLog(fmt.Sprintf("Hashed password bytes (hex): %x", []byte(hashedPassword)))
+
+	// Step 2: Create User struct
+	addLog("\n--- Step 2: Creating User Struct ---")
+	user := User{
+		ID:       testID,
+		Username: testUsername,
+		Email:    testEmail,
+		Password: hashedPassword,
+	}
+	addLog(fmt.Sprintf("User.Password type: %T", user.Password))
+	addLog(fmt.Sprintf("User.Password value: %q", user.Password))
+	addLog(fmt.Sprintf("User.Password length: %d", len(user.Password)))
+	addLog(fmt.Sprintf("User.Password bytes (hex): %x", []byte(user.Password)))
+
+	// Step 3: Store user in database (ACTUAL DATABASE OPERATION)
+	addLog("\n--- Step 3: Storing User in Database (saveUser) ---")
+	addLog(fmt.Sprintf("Calling saveUser with username: %q", user.Username))
+	err = saveUser(user)
+	if err != nil {
+		addLog(fmt.Sprintf("ERROR: Failed to save user: %v", err))
+		return sendErrorResponse(h, fmt.Sprintf("Failed to save user: %v", err), 500)
+	}
+	addLog("✓ User saved successfully to database")
+
+	// Step 4: Retrieve user from database by username (ACTUAL DATABASE OPERATION)
+	addLog("\n--- Step 4: Retrieving User from Database by Username (getUserByUsername) ---")
+	addLog(fmt.Sprintf("Calling getUserByUsername with username: %q", testUsername))
+	retrievedUserByUsername, err := getUserByUsername(testUsername)
+	if err != nil {
+		addLog(fmt.Sprintf("ERROR: Failed to retrieve user by username: %v", err))
+		return sendErrorResponse(h, fmt.Sprintf("Failed to retrieve user by username: %v", err), 500)
+	}
+	addLog("✓ User retrieved successfully from database by username")
+	addLog(fmt.Sprintf("Retrieved User.Password type: %T", retrievedUserByUsername.Password))
+	addLog(fmt.Sprintf("Retrieved User.Password value: %q", retrievedUserByUsername.Password))
+	addLog(fmt.Sprintf("Retrieved User.Password length: %d", len(retrievedUserByUsername.Password)))
+	addLog(fmt.Sprintf("Retrieved User.Password bytes (hex): %x", []byte(retrievedUserByUsername.Password)))
+	addLog(fmt.Sprintf("Retrieved User.ID: %q", retrievedUserByUsername.ID))
+	addLog(fmt.Sprintf("Retrieved User.Username: %q", retrievedUserByUsername.Username))
+	addLog(fmt.Sprintf("Retrieved User.Email: %q", retrievedUserByUsername.Email))
+
+	// Step 4b: Retrieve user from database by ID (ACTUAL DATABASE OPERATION)
+	addLog("\n--- Step 4b: Retrieving User from Database by ID (getUserByID) ---")
+	addLog(fmt.Sprintf("Calling getUserByID with ID: %q", testID))
+	retrievedUserByID, err := getUserByID(testID)
+	if err != nil {
+		addLog(fmt.Sprintf("ERROR: Failed to retrieve user by ID: %v", err))
+		return sendErrorResponse(h, fmt.Sprintf("Failed to retrieve user by ID: %v", err), 500)
+	}
+	addLog("✓ User retrieved successfully from database by ID")
+	addLog(fmt.Sprintf("Retrieved by ID User.Password type: %T", retrievedUserByID.Password))
+	addLog(fmt.Sprintf("Retrieved by ID User.Password value: %q", retrievedUserByID.Password))
+	addLog(fmt.Sprintf("Retrieved by ID User.Password length: %d", len(retrievedUserByID.Password)))
+	addLog(fmt.Sprintf("Retrieved by ID User.Password bytes (hex): %x", []byte(retrievedUserByID.Password)))
+	addLog(fmt.Sprintf("Retrieved by ID User.ID: %q", retrievedUserByID.ID))
+	addLog(fmt.Sprintf("Retrieved by ID User.Username: %q", retrievedUserByID.Username))
+	addLog(fmt.Sprintf("Retrieved by ID User.Email: %q", retrievedUserByID.Email))
+
+	// Verify both retrieval methods return the same data
+	addLog("\n--- Step 4c: Verifying Both Retrieval Methods Return Same Data ---")
+	usernameRetrievalMatch := retrievedUserByUsername.Password == retrievedUserByID.Password
+	addLog(fmt.Sprintf("Password match between username and ID retrieval: %v", usernameRetrievalMatch))
+	if !usernameRetrievalMatch {
+		addLog("ERROR: Password differs between username and ID retrieval!")
+		addLog(fmt.Sprintf("  Username retrieval: %q", retrievedUserByUsername.Password))
+		addLog(fmt.Sprintf("  ID retrieval: %q", retrievedUserByID.Password))
+	}
+
+	// Use the username retrieval for further tests (both should be the same)
+	retrievedUser := retrievedUserByUsername
+
+	// Step 5: Compare original hash with retrieved hash
+	addLog("\n--- Step 5: Comparing Original and Retrieved Hashes ---")
+	addLog(fmt.Sprintf("Original hash: %q (len=%d)", hashedPassword, len(hashedPassword)))
+	addLog(fmt.Sprintf("Retrieved hash: %q (len=%d)", retrievedUser.Password, len(retrievedUser.Password)))
+	addLog(fmt.Sprintf("Original hash bytes (hex): %x", []byte(hashedPassword)))
+	addLog(fmt.Sprintf("Retrieved hash bytes (hex): %x", []byte(retrievedUser.Password)))
+	
+	hashesMatch := retrievedUser.Password == hashedPassword
+	addLog(fmt.Sprintf("String comparison (==): %v", hashesMatch))
+	
+	if !hashesMatch {
+		addLog("ERROR: Password hash changed during storage/retrieval!")
+		addLog(fmt.Sprintf("Original: %q", hashedPassword))
+		addLog(fmt.Sprintf("Retrieved: %q", retrievedUser.Password))
+	}
+
+	lengthMatch := len(retrievedUser.Password) == len(hashedPassword)
+	addLog(fmt.Sprintf("Length comparison: %v (Original=%d, Retrieved=%d)", 
+		lengthMatch, len(hashedPassword), len(retrievedUser.Password)))
+
+	// Byte-by-byte comparison
+	originalBytes := []byte(hashedPassword)
+	retrievedBytes := []byte(retrievedUser.Password)
+	byteMismatches := 0
+	mismatchPositions := []int{}
+	
+	if len(originalBytes) == len(retrievedBytes) {
+		for i := 0; i < len(originalBytes); i++ {
+			if originalBytes[i] != retrievedBytes[i] {
+				byteMismatches++
+				if len(mismatchPositions) < 10 {
+					mismatchPositions = append(mismatchPositions, i)
+				}
+			}
+		}
+		addLog(fmt.Sprintf("Byte-by-byte comparison: %d mismatches found", byteMismatches))
+		if byteMismatches > 0 {
+			for _, pos := range mismatchPositions {
+				addLog(fmt.Sprintf("  Mismatch at position %d: Original=0x%02x (%d), Retrieved=0x%02x (%d)",
+					pos, originalBytes[pos], originalBytes[pos], retrievedBytes[pos], retrievedBytes[pos]))
+			}
+		}
+	} else {
+		addLog(fmt.Sprintf("ERROR: Byte array length mismatch: %d != %d", len(originalBytes), len(retrievedBytes)))
+	}
+
+	// Step 6: Test password comparison with retrieved hash
+	addLog("\n--- Step 6: Testing Password Comparison ---")
+	addLog(fmt.Sprintf("Retrieved hash: %q", retrievedUser.Password))
+	addLog(fmt.Sprintf("Test password: %q", testPassword))
+	addLog(fmt.Sprintf("Test password bytes (hex): %x", []byte(testPassword)))
+	
+	comparisonResult := comparePassword(retrievedUser.Password, testPassword)
+	addLog(fmt.Sprintf("Password comparison result: %v", comparisonResult))
+
+	if !comparisonResult {
+		addLog("ERROR: Password comparison failed with retrieved hash!")
+	}
+
+	// Step 7: Verify all fields match
+	addLog("\n--- Step 7: Verifying All User Fields ---")
+	idMatch := retrievedUser.ID == user.ID
+	usernameMatch := retrievedUser.Username == user.Username
+	emailMatch := retrievedUser.Email == user.Email
+	
+	addLog(fmt.Sprintf("ID match: %v (Original=%q, Retrieved=%q)", idMatch, user.ID, retrievedUser.ID))
+	addLog(fmt.Sprintf("Username match: %v (Original=%q, Retrieved=%q)", usernameMatch, user.Username, retrievedUser.Username))
+	addLog(fmt.Sprintf("Email match: %v (Original=%q, Retrieved=%q)", emailMatch, user.Email, retrievedUser.Email))
+
+	// Prepare response
+	response := map[string]interface{}{
+		"message": "Database password test completed",
+		"test": map[string]interface{}{
+			"username": testUsername,
+			"email":    testEmail,
+			"id":       testID,
+		},
+		"results": map[string]interface{}{
+			"password_hash_stored":                hashedPassword,
+			"password_hash_retrieved_by_username": retrievedUserByUsername.Password,
+			"password_hash_retrieved_by_id":       retrievedUserByID.Password,
+			"username_id_retrieval_match":         usernameRetrievalMatch,
+			"hashes_match":                        hashesMatch,
+			"length_match":                        lengthMatch,
+			"byte_mismatches":                     byteMismatches,
+			"password_comparison":                 comparisonResult,
+			"id_match":                            idMatch,
+			"username_match":                      usernameMatch,
+			"email_match":                         emailMatch,
+		},
+		"debug_log": debugLog,
+		"summary": map[string]interface{}{
+			"success":                hashesMatch && lengthMatch && comparisonResult && idMatch && usernameMatch && emailMatch,
+			"password_hash_preserved": hashesMatch && lengthMatch && byteMismatches == 0,
+			"password_comparison_works": comparisonResult,
+			"all_fields_match":       idMatch && usernameMatch && emailMatch,
+		},
 	}
 
 	return sendJSONResponse(h, response)
