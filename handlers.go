@@ -1,10 +1,8 @@
 package lib
 
 import (
-	"bytes"
 	"encoding/json"
 	"fmt"
-	"io"
 	"strings"
 	"time"
 
@@ -41,33 +39,25 @@ func register(e event.Event) uint32 {
 	}
 	setCORSHeaders(h)
 
+	// Handle OPTIONS preflight request
+	method, err := h.Method()
+	if err == nil && method == "OPTIONS" {
+		h.Return(200)
+		return 0
+	}
+
 	reqDec := json.NewDecoder(h.Body())
 	defer h.Body().Close()
 
 	var req RegisterRequest
 	if err := reqDec.Decode(&req); err != nil {
-		return sendErrorResponse(h, err.Error(), 400)
+		return sendErrorResponse(h, "invalid request format", 400)
 	}
-
-	// Debug: Show raw password before trimming
-	fmt.Printf("DEBUG: Register - Raw password from JSON (len=%d): %q\n", len(req.Password), req.Password)
-	fmt.Printf("DEBUG: Register - Raw password bytes (hex): %x\n", []byte(req.Password))
-	fmt.Printf("DEBUG: Register - Raw password bytes (decimal): %v\n", []byte(req.Password))
 
 	// Trim and validate required fields
 	req.Username = strings.TrimSpace(req.Username)
 	req.Email = strings.TrimSpace(req.Email)
-	originalPassword := req.Password
 	req.Password = strings.TrimSpace(req.Password)
-	
-	// Debug: Show password after trimming
-	if originalPassword != req.Password {
-		fmt.Printf("DEBUG: Register - Password was trimmed! Before: %q (len=%d), After: %q (len=%d)\n", 
-			originalPassword, len(originalPassword), req.Password, len(req.Password))
-		fmt.Printf("DEBUG: Register - Trimmed password bytes (hex): %x\n", []byte(req.Password))
-	} else {
-		fmt.Printf("DEBUG: Register - Password unchanged after trim: %q (len=%d)\n", req.Password, len(req.Password))
-	}
 	
 	if req.Username == "" || req.Email == "" || req.Password == "" {
 		return sendErrorResponse(h, "username, email, and password are required", 400)
@@ -82,14 +72,11 @@ func register(e event.Event) uint32 {
 		return sendErrorResponse(h, message, 409)
 	}
 
-	// Hash password (already trimmed above)
-	fmt.Printf("DEBUG: Register - About to hash password: %q (len=%d, bytes: %x)\n", 
-		req.Password, len(req.Password), []byte(req.Password))
+	// Hash password
 	hashedPassword, err := hashPassword(req.Password)
 	if err != nil {
 		return sendErrorResponse(h, "failed to hash password", 500)
 	}
-	fmt.Printf("DEBUG: Register - Password hashed successfully, hash: %s\n", hashedPassword)
 
 	// Create user
 	userID := fmt.Sprintf("%d", time.Now().UnixNano())
@@ -101,13 +88,9 @@ func register(e event.Event) uint32 {
 	}
 
 	// Save user
-	fmt.Printf("DEBUG: Register - Saving user with ID: %s, Username: %s, Password hash len: %d\n",
-		user.ID, user.Username, len(user.Password))
 	if err := saveUser(user); err != nil {
-		fmt.Printf("DEBUG: Register - saveUser failed: %v\n", err)
 		return sendErrorResponse(h, "failed to save user", 500)
 	}
-	fmt.Printf("DEBUG: Register - User saved successfully\n")
 
 	// Return user without password
 	userResponse := UserResponse{
@@ -127,68 +110,42 @@ func login(e event.Event) uint32 {
 	}
 	setCORSHeaders(h)
 
-	// Read raw body for debugging
-	bodyData, err := io.ReadAll(h.Body())
-	if err != nil {
-		fmt.Printf("DEBUG: Login - Error reading body: %v\n", err)
-		return sendErrorResponse(h, "failed to read request body", 400)
+	// Handle OPTIONS preflight request
+	method, err := h.Method()
+	if err == nil && method == "OPTIONS" {
+		h.Return(200)
+		return 0
 	}
-	defer h.Body().Close()
-	
-	fmt.Printf("DEBUG: Login - Raw HTTP body: %s\n", string(bodyData))
-	fmt.Printf("DEBUG: Login - Raw HTTP body bytes (hex): %x\n", bodyData)
-	fmt.Printf("DEBUG: Login - Raw HTTP body length: %d bytes\n", len(bodyData))
 
-	// Create decoder from body data
-	reqDec := json.NewDecoder(bytes.NewReader(bodyData))
+	// Decode request body (consistent with register and updateUser handlers)
+	reqDec := json.NewDecoder(h.Body())
+	defer h.Body().Close()
+
 	var req LoginRequest
 	if err := reqDec.Decode(&req); err != nil {
-		fmt.Printf("DEBUG: Login - JSON decode error: %v\n", err)
-		return sendErrorResponse(h, err.Error(), 400)
+		return sendErrorResponse(h, "invalid request format", 400)
 	}
-
-	// Debug: Show raw password before trimming
-	fmt.Printf("DEBUG: Login - Raw password from JSON (len=%d): %q\n", len(req.Password), req.Password)
-	fmt.Printf("DEBUG: Login - Raw password bytes (hex): %x\n", []byte(req.Password))
-	fmt.Printf("DEBUG: Login - Raw password bytes (decimal): %v\n", []byte(req.Password))
 
 	// Trim and validate required fields
 	req.Username = strings.TrimSpace(req.Username)
-	originalPassword := req.Password
 	req.Password = strings.TrimSpace(req.Password)
-	
-	// Debug: Show password after trimming
-	if originalPassword != req.Password {
-		fmt.Printf("DEBUG: Login - Password was trimmed! Before: %q (len=%d), After: %q (len=%d)\n", 
-			originalPassword, len(originalPassword), req.Password, len(req.Password))
-		fmt.Printf("DEBUG: Login - Trimmed password bytes (hex): %x\n", []byte(req.Password))
-	} else {
-		fmt.Printf("DEBUG: Login - Password unchanged after trim: %q (len=%d)\n", req.Password, len(req.Password))
-	}
 	
 	if req.Username == "" || req.Password == "" {
 		return sendErrorResponse(h, "username and password are required", 400)
 	}
 
 	// Get user by username
-	fmt.Printf("DEBUG: Login attempt for username: %s\n", req.Username)
 	user, err := getUserByUsername(req.Username)
 	if err != nil {
-		fmt.Printf("DEBUG: getUserByUsername failed: %v\n", err)
-		return sendErrorResponse(h, fmt.Sprintf("getUserByUsername failed: %v", err), 401)
+		// Don't expose internal error details - return generic invalid credentials message
+		// Use same error message as password mismatch to prevent username enumeration
+		return sendErrorResponse(h, "invalid credentials", 401)
 	}
-	fmt.Printf("DEBUG: User found - ID: %s, Username: %s, Email: %s, Password length: %d\n", 
-		user.ID, user.Username, user.Email, len(user.Password))
 
 	// Verify password
-	fmt.Printf("DEBUG: Login - About to compare - Hashed len=%d, Plain len=%d\n", len(user.Password), len(req.Password))
-	fmt.Printf("DEBUG: Login - Plain password being compared: %q\n", req.Password)
-	fmt.Printf("DEBUG: Login - Plain password bytes (hex): %x\n", []byte(req.Password))
 	if !comparePassword(user.Password, req.Password) {
-		fmt.Printf("DEBUG: Password comparison failed\n")
-		return sendErrorResponse(h, "invalid credentials - password mismatch", 401)
+		return sendErrorResponse(h, "invalid credentials", 401)
 	}
-	fmt.Printf("DEBUG: Password verified successfully\n")
 
 	// Generate token
 	token, err := GenerateToken(user.ID)
@@ -247,6 +204,13 @@ func updateUser(e event.Event) uint32 {
 	}
 	setCORSHeaders(h)
 
+	// Handle OPTIONS preflight request
+	method, err := h.Method()
+	if err == nil && method == "OPTIONS" {
+		h.Return(200)
+		return 0
+	}
+
 	// Authenticate
 	userID, retCode := authenticate(h)
 	if retCode != 0 {
@@ -258,7 +222,7 @@ func updateUser(e event.Event) uint32 {
 
 	var req UpdateUserRequest
 	if err := reqDec.Decode(&req); err != nil {
-		return sendErrorResponse(h, "invalid JSON", 400)
+		return sendErrorResponse(h, "invalid request format", 400)
 	}
 
 	// Get user
@@ -267,16 +231,26 @@ func updateUser(e event.Event) uint32 {
 		return sendErrorResponse(h, "user not found", 404)
 	}
 
+	// Store original email to check if it changed
+	originalEmail := user.Email
+	emailWillChange := false
+
 	// Update fields if provided
 	if req.Email != "" {
 		req.Email = strings.TrimSpace(req.Email)
 		if req.Email == "" {
 			return sendErrorResponse(h, "email cannot be empty", 400)
 		}
-		// Check if email already exists (and not for this user)
-		existingUser, err := getUserByEmail(req.Email)
-		if err == nil && existingUser.ID != userID {
-			return sendErrorResponse(h, "email already exists", 409)
+		
+		// Check if email is actually changing
+		if req.Email != originalEmail {
+			emailWillChange = true
+			
+			// Check if new email already exists (and not for this user)
+			existingUser, err := getUserByEmail(req.Email)
+			if err == nil && existingUser.ID != userID {
+				return sendErrorResponse(h, "email already exists", 409)
+			}
 		}
 		user.Email = req.Email
 	}
@@ -293,9 +267,18 @@ func updateUser(e event.Event) uint32 {
 		user.Password = hashedPassword
 	}
 
-	// Save updated user
+	// Save updated user first (this creates/updates the new email mapping)
 	if err := saveUser(*user); err != nil {
 		return sendErrorResponse(h, "failed to update user", 500)
+	}
+
+	// After successful save, delete old email mapping if email changed
+	// This ensures atomicity: if save fails, old mapping remains; if save succeeds, we clean up old mapping
+	if emailWillChange && originalEmail != "" {
+		if err := deleteEmailMapping(originalEmail); err != nil {
+			// Don't fail the update if deletion fails - the new mapping is already saved
+			// This is a cleanup operation, not critical for the update to succeed
+		}
 	}
 
 	// Return updated user without password
@@ -315,6 +298,13 @@ func deleteUser(e event.Event) uint32 {
 		return 1
 	}
 	setCORSHeaders(h)
+
+	// Handle OPTIONS preflight request
+	method, err := h.Method()
+	if err == nil && method == "OPTIONS" {
+		h.Return(200)
+		return 0
+	}
 
 	// Authenticate
 	userID, retCode := authenticate(h)
