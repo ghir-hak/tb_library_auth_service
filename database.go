@@ -3,6 +3,7 @@ package lib
 import (
 	"encoding/json"
 	"fmt"
+	"strings"
 
 	"github.com/taubyte/go-sdk/database"
 )
@@ -37,29 +38,50 @@ func getUserByID(id string) (*User, error) {
 func getUserByUsername(username string) (*User, error) {
 	db, err := database.New("/data")
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("STEP 0: db connection failed: %w", err)
 	}
 
-	// Get user ID from username index
-	userIDData, err := db.Get(fmt.Sprintf("%s%s", usernameIndexPrefix, username))
+	// Step 1: Get user ID from username index
+	usernameKey := fmt.Sprintf("%s%s", usernameIndexPrefix, username)
+	userIDData, err := db.Get(usernameKey)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("STEP 1 FAILED: username index lookup - key: '%s', username: '%s', error: %w", usernameKey, username, err)
 	}
 
+	// Step 2: Convert bytes to string and clean it
 	userID := string(userIDData)
-
-	// Get user data using the same connection
-	data, err := db.Get(fmt.Sprintf("%s%s", usersPrefix, userID))
-	if err != nil {
-		return nil, err
+	userID = strings.TrimSpace(userID)
+	userID = strings.TrimRight(userID, "\x00")
+	if userID == "" {
+		return nil, fmt.Errorf("STEP 2 FAILED: empty userID from index - raw bytes: %v, len: %d", userIDData, len(userIDData))
 	}
 
+	// Step 3: Get user data using the userID
+	userKey := fmt.Sprintf("%s%s", usersPrefix, userID)
+	data, err := db.Get(userKey)
+	if err != nil {
+		return nil, fmt.Errorf("STEP 3 FAILED: user data lookup - userID: '%s' (len=%d), key: '%s', error: %w", userID, len(userID), userKey, err)
+	}
+
+	if len(data) == 0 {
+		return nil, fmt.Errorf("STEP 3 FAILED: empty user data - userID: '%s', key: '%s'", userID, userKey)
+	}
+
+	// Step 4: Unmarshal user data
 	var user User
 	if err := json.Unmarshal(data, &user); err != nil {
-		return nil, err
+		return nil, fmt.Errorf("STEP 4 FAILED: json unmarshal - userID: '%s', data len: %d, data preview: %s, error: %w", userID, len(data), string(data[:min(50, len(data))]), err)
 	}
 
 	return &user, nil
+}
+
+// min helper function
+func min(a, b int) int {
+	if a < b {
+		return a
+	}
+	return b
 }
 
 // getUserByEmail retrieves a user by email from the database
