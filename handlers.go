@@ -255,3 +255,20 @@ func deleteUser(e event.Event) uint32 {
 	return sendJSONResponse(h, response)
 }
 
+//export test
+func test(e event.Event) uint32 {
+	h, err := e.HTTP()
+	if err != nil {
+		return 1
+	}
+	setCORSHeaders(h)
+
+	response := map[string]string{
+		"message": "New simplified database structure is active",
+		"version": "2.0",
+		"timestamp": time.Now().Format(time.RFC3339),
+	}
+
+	return sendJSONResponse(h, response)
+}
+
