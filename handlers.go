@@ -3,7 +3,6 @@ package lib
 import (
 	"encoding/json"
 	"fmt"
-	"io"
 	"time"
 
 	"github.com/taubyte/go-sdk/event"
@@ -39,8 +38,11 @@ func register(e event.Event) uint32 {
 	}
 	setCORSHeaders(h)
 
+	reqDec := json.NewDecoder(h.Body())
+	defer h.Body().Close()
+
 	var req RegisterRequest
-	if err := readJSONBody(h, &req); err != nil {
+	if err := reqDec.Decode(&req); err != nil {
 		return sendErrorResponse(h, err.Error(), 400)
 	}
 
@@ -96,8 +98,11 @@ func login(e event.Event) uint32 {
 	}
 	setCORSHeaders(h)
 
+	reqDec := json.NewDecoder(h.Body())
+	defer h.Body().Close()
+
 	var req LoginRequest
-	if err := readJSONBody(h, &req); err != nil {
+	if err := reqDec.Decode(&req); err != nil {
 		return sendErrorResponse(h, err.Error(), 400)
 	}
 
@@ -180,14 +185,11 @@ func updateUser(e event.Event) uint32 {
 		return retCode
 	}
 
-	// Read request body
-	body, err := io.ReadAll(h.Body())
-	if err != nil {
-		return sendErrorResponse(h, "failed to read request body", 400)
-	}
+	reqDec := json.NewDecoder(h.Body())
+	defer h.Body().Close()
 
 	var req UpdateUserRequest
-	if err := json.Unmarshal(body, &req); err != nil {
+	if err := reqDec.Decode(&req); err != nil {
 		return sendErrorResponse(h, "invalid JSON", 400)
 	}
 

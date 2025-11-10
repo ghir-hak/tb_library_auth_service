@@ -19,7 +19,6 @@ func getUserByID(id string) (*User, error) {
 	if err != nil {
 		return nil, err
 	}
-	defer db.Close()
 
 	data, err := db.Get(fmt.Sprintf("%s%s", usersPrefix, id))
 	if err != nil {
@@ -40,7 +39,6 @@ func getUserByUsername(username string) (*User, error) {
 	if err != nil {
 		return nil, err
 	}
-	defer db.Close()
 
 	// Get user ID from username index
 	userIDData, err := db.Get(fmt.Sprintf("%s%s", usernameIndexPrefix, username))
@@ -49,7 +47,19 @@ func getUserByUsername(username string) (*User, error) {
 	}
 
 	userID := string(userIDData)
-	return getUserByID(userID)
+
+	// Get user data using the same connection
+	data, err := db.Get(fmt.Sprintf("%s%s", usersPrefix, userID))
+	if err != nil {
+		return nil, err
+	}
+
+	var user User
+	if err := json.Unmarshal(data, &user); err != nil {
+		return nil, err
+	}
+
+	return &user, nil
 }
 
 // getUserByEmail retrieves a user by email from the database
@@ -58,7 +68,6 @@ func getUserByEmail(email string) (*User, error) {
 	if err != nil {
 		return nil, err
 	}
-	defer db.Close()
 
 	// Get user ID from email index
 	userIDData, err := db.Get(fmt.Sprintf("%s%s", emailIndexPrefix, email))
@@ -67,7 +76,19 @@ func getUserByEmail(email string) (*User, error) {
 	}
 
 	userID := string(userIDData)
-	return getUserByID(userID)
+
+	// Get user data using the same connection
+	data, err := db.Get(fmt.Sprintf("%s%s", usersPrefix, userID))
+	if err != nil {
+		return nil, err
+	}
+
+	var user User
+	if err := json.Unmarshal(data, &user); err != nil {
+		return nil, err
+	}
+
+	return &user, nil
 }
 
 // saveUser saves a user to the database
@@ -76,7 +97,6 @@ func saveUser(user User) error {
 	if err != nil {
 		return err
 	}
-	defer db.Close()
 
 	// Serialize user
 	userData, err := json.Marshal(user)
@@ -111,11 +131,15 @@ func deleteUserFromDB(id string) error {
 	if err != nil {
 		return err
 	}
-	defer db.Close()
 
 	// Get user first to delete indexes
-	user, err := getUserByID(id)
+	userData, err := db.Get(fmt.Sprintf("%s%s", usersPrefix, id))
 	if err != nil {
+		return err
+	}
+
+	var user User
+	if err := json.Unmarshal(userData, &user); err != nil {
 		return err
 	}
 
@@ -146,7 +170,6 @@ func userExists(username, email string) (bool, string, error) {
 	if err != nil {
 		return false, "", err
 	}
-	defer db.Close()
 
 	// Check username
 	_, err = db.Get(fmt.Sprintf("%s%s", usernameIndexPrefix, username))

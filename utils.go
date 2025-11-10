@@ -2,8 +2,6 @@ package lib
 
 import (
 	"encoding/json"
-	"fmt"
-	"io"
 
 	http "github.com/taubyte/go-sdk/http/event"
 	"golang.org/x/crypto/bcrypt"
@@ -63,17 +61,5 @@ func hashPassword(password string) (string, error) {
 func comparePassword(hashedPassword, password string) bool {
 	err := bcrypt.CompareHashAndPassword([]byte(hashedPassword), []byte(password))
 	return err == nil
-}
-
-// readJSONBody reads and unmarshals JSON from request body
-func readJSONBody(h http.Event, v interface{}) error {
-	body, err := io.ReadAll(h.Body())
-	if err != nil {
-		return fmt.Errorf("failed to read request body: %w", err)
-	}
-	if err := json.Unmarshal(body, v); err != nil {
-		return fmt.Errorf("invalid JSON: %w", err)
-	}
-	return nil
 }
 
