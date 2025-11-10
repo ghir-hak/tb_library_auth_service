@@ -76,9 +76,13 @@ func register(e event.Event) uint32 {
 	}
 
 	// Save user
+	fmt.Printf("DEBUG: Register - Saving user with ID: %s, Username: %s, Password hash len: %d\n",
+		user.ID, user.Username, len(user.Password))
 	if err := saveUser(user); err != nil {
+		fmt.Printf("DEBUG: Register - saveUser failed: %v\n", err)
 		return sendErrorResponse(h, "failed to save user", 500)
 	}
+	fmt.Printf("DEBUG: Register - User saved successfully\n")
 
 	// Return user without password
 	userResponse := UserResponse{
@@ -112,15 +116,22 @@ func login(e event.Event) uint32 {
 	}
 
 	// Get user by username
+	fmt.Printf("DEBUG: Login attempt for username: %s\n", req.Username)
 	user, err := getUserByUsername(req.Username)
 	if err != nil {
+		fmt.Printf("DEBUG: getUserByUsername failed: %v\n", err)
 		return sendErrorResponse(h, fmt.Sprintf("getUserByUsername failed: %v", err), 401)
 	}
+	fmt.Printf("DEBUG: User found - ID: %s, Username: %s, Email: %s, Password length: %d\n", 
+		user.ID, user.Username, user.Email, len(user.Password))
 
 	// Verify password
+	fmt.Printf("DEBUG: Comparing password (hashed len=%d, plain len=%d)\n", len(user.Password), len(req.Password))
 	if !comparePassword(user.Password, req.Password) {
+		fmt.Printf("DEBUG: Password comparison failed\n")
 		return sendErrorResponse(h, "invalid credentials - password mismatch", 401)
 	}
+	fmt.Printf("DEBUG: Password verified successfully\n")
 
 	// Generate token
 	token, err := GenerateToken(user.ID)

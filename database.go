@@ -45,21 +45,35 @@ func getUserByID(id string) (*User, error) {
 // getUserByUsername retrieves a user by username from the database
 // SIMPLE: Direct lookup by username, no index needed
 func getUserByUsername(username string) (*User, error) {
+	fmt.Printf("DEBUG: getUserByUsername called with username: '%s'\n", username)
+	
 	db, err := database.New("/data")
 	if err != nil {
+		fmt.Printf("DEBUG: Database connection failed: %v\n", err)
 		return nil, fmt.Errorf("db connection failed: %w", err)
 	}
 
 	// Direct read - no index needed!
-	data, err := db.Get(fmt.Sprintf("%s%s", usersPrefix, username))
+	key := fmt.Sprintf("%s%s", usersPrefix, username)
+	fmt.Printf("DEBUG: Looking up key: '%s'\n", key)
+	
+	data, err := db.Get(key)
 	if err != nil {
+		fmt.Printf("DEBUG: Database Get failed for key '%s': %v\n", key, err)
 		return nil, fmt.Errorf("user not found for username '%s': %w", username, err)
 	}
 
+	fmt.Printf("DEBUG: Data retrieved, length: %d bytes\n", len(data))
+	fmt.Printf("DEBUG: Data preview (first 100 chars): %s\n", string(data[:min(100, len(data))]))
+
 	var storageUser StorageUser
 	if err := json.Unmarshal(data, &storageUser); err != nil {
+		fmt.Printf("DEBUG: JSON unmarshal failed: %v\n", err)
 		return nil, fmt.Errorf("failed to unmarshal user: %w", err)
 	}
+
+	fmt.Printf("DEBUG: Unmarshaled user - ID: %s, Username: %s, Email: %s, Password len: %d\n",
+		storageUser.ID, storageUser.Username, storageUser.Email, len(storageUser.Password))
 
 	user := User{
 		ID:       storageUser.ID,
@@ -69,6 +83,14 @@ func getUserByUsername(username string) (*User, error) {
 	}
 
 	return &user, nil
+}
+
+// min helper function
+func min(a, b int) int {
+	if a < b {
+		return a
+	}
+	return b
 }
 
 // getUserByEmail retrieves a user by email from the database
@@ -97,8 +119,12 @@ func getUserByEmail(email string) (*User, error) {
 // saveUser saves a user to the database
 // SIMPLE: Store in multiple places for easy lookup
 func saveUser(user User) error {
+	fmt.Printf("DEBUG: saveUser called - ID: %s, Username: %s, Email: %s, Password len: %d\n",
+		user.ID, user.Username, user.Email, len(user.Password))
+	
 	db, err := database.New("/data")
 	if err != nil {
+		fmt.Printf("DEBUG: Database connection failed: %v\n", err)
 		return fmt.Errorf("db connection failed: %w", err)
 	}
 
@@ -113,23 +139,39 @@ func saveUser(user User) error {
 	// Serialize storage user (includes password)
 	userData, err := json.Marshal(storageUser)
 	if err != nil {
+		fmt.Printf("DEBUG: JSON marshal failed: %v\n", err)
 		return fmt.Errorf("failed to marshal user: %w", err)
 	}
 
+	fmt.Printf("DEBUG: Marshaled user data length: %d bytes\n", len(userData))
+	fmt.Printf("DEBUG: Marshaled data includes password: %v\n", strings.Contains(string(userData), "password"))
+
 	// Store by username (primary - for login)
-	if err := db.Put(fmt.Sprintf("%s%s", usersPrefix, user.Username), userData); err != nil {
+	usernameKey := fmt.Sprintf("%s%s", usersPrefix, user.Username)
+	fmt.Printf("DEBUG: Saving to username key: '%s'\n", usernameKey)
+	if err := db.Put(usernameKey, userData); err != nil {
+		fmt.Printf("DEBUG: Failed to save user by username: %v\n", err)
 		return fmt.Errorf("failed to save user by username: %w", err)
 	}
+	fmt.Printf("DEBUG: Successfully saved to username key\n")
 
 	// Store by ID (for JWT lookup)
-	if err := db.Put(fmt.Sprintf("%s%s", usersByIDPrefix, user.ID), userData); err != nil {
+	idKey := fmt.Sprintf("%s%s", usersByIDPrefix, user.ID)
+	fmt.Printf("DEBUG: Saving to ID key: '%s'\n", idKey)
+	if err := db.Put(idKey, userData); err != nil {
+		fmt.Printf("DEBUG: Failed to save user by ID: %v\n", err)
 		return fmt.Errorf("failed to save user by ID: %w", err)
 	}
+	fmt.Printf("DEBUG: Successfully saved to ID key\n")
 
 	// Store email mapping (just username for uniqueness check and lookup)
-	if err := db.Put(fmt.Sprintf("%s%s", usersByEmailPrefix, user.Email), []byte(user.Username)); err != nil {
+	emailKey := fmt.Sprintf("%s%s", usersByEmailPrefix, user.Email)
+	fmt.Printf("DEBUG: Saving email mapping to key: '%s' -> '%s'\n", emailKey, user.Username)
+	if err := db.Put(emailKey, []byte(user.Username)); err != nil {
+		fmt.Printf("DEBUG: Failed to save email mapping: %v\n", err)
 		return fmt.Errorf("failed to save email mapping: %w", err)
 	}
+	fmt.Printf("DEBUG: Successfully saved email mapping\n")
 
 	return nil
 }

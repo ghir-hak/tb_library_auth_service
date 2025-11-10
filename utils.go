@@ -2,6 +2,8 @@ package lib
 
 import (
 	"encoding/json"
+	"fmt"
+	"strings"
 
 	http "github.com/taubyte/go-sdk/http/event"
 	"golang.org/x/crypto/bcrypt"
@@ -59,7 +61,29 @@ func hashPassword(password string) (string, error) {
 
 // comparePassword compares a password with a hash
 func comparePassword(hashedPassword, password string) bool {
+	fmt.Printf("DEBUG: comparePassword - hashed len: %d, plain len: %d\n", len(hashedPassword), len(password))
+	
+	// Validate hash format
+	if len(hashedPassword) == 0 {
+		fmt.Printf("DEBUG: Hashed password is empty!\n")
+		return false
+	}
+	
+	// Check if it's a valid bcrypt hash (should start with $2a$, $2b$, or $2y$)
+	if len(hashedPassword) < 7 || (hashedPassword[:4] != "$2a$" && hashedPassword[:4] != "$2b$" && hashedPassword[:4] != "$2y$") {
+		fmt.Printf("DEBUG: Invalid bcrypt hash format! Hash starts with: %s\n", hashedPassword[:min(10, len(hashedPassword))])
+		return false
+	}
+	
+	// Trim any potential whitespace
+	hashedPassword = strings.TrimSpace(hashedPassword)
+	
 	err := bcrypt.CompareHashAndPassword([]byte(hashedPassword), []byte(password))
-	return err == nil
+	if err != nil {
+		fmt.Printf("DEBUG: Password comparison error: %v\n", err)
+		return false
+	}
+	fmt.Printf("DEBUG: Password comparison succeeded\n")
+	return true
 }
 
