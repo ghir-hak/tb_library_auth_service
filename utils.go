@@ -52,11 +52,17 @@ func sendErrorResponse(h http.Event, message string, code int) uint32 {
 
 // hashPassword hashes a password using bcrypt
 func hashPassword(password string) (string, error) {
+	fmt.Printf("DEBUG: hashPassword - Hashing password (length: %d, first 10 chars: %s)\n", 
+		len(password), password[:min(10, len(password))])
 	bytes, err := bcrypt.GenerateFromPassword([]byte(password), 10)
 	if err != nil {
+		fmt.Printf("DEBUG: hashPassword - Failed to generate hash: %v\n", err)
 		return "", err
 	}
-	return string(bytes), nil
+	hashed := string(bytes)
+	fmt.Printf("DEBUG: hashPassword - Generated hash (length: %d): %s\n", len(hashed), hashed)
+	fmt.Printf("DEBUG: hashPassword - Hash bytes (hex): %x\n", bytes)
+	return hashed, nil
 }
 
 // min returns the minimum of two integers
@@ -101,11 +107,16 @@ func comparePassword(hashedPassword, password string) bool {
 	
 	fmt.Printf("DEBUG: comparePassword - hashed len: %d, plain len: %d, hash prefix: %s\n", 
 		len(hashedPassword), len(password), hashedPassword[:min(7, len(hashedPassword))])
+	fmt.Printf("DEBUG: comparePassword - FULL HASH: %s\n", hashedPassword)
+	fmt.Printf("DEBUG: comparePassword - Hash bytes (hex): %x\n", []byte(hashedPassword))
+	fmt.Printf("DEBUG: comparePassword - Plain password (first 10 chars): %s\n", 
+		password[:min(10, len(password))])
 	
 	// Compare using bcrypt - this is the authoritative check
 	err := bcrypt.CompareHashAndPassword([]byte(hashedPassword), []byte(password))
 	if err != nil {
 		fmt.Printf("DEBUG: comparePassword - bcrypt comparison failed: %v\n", err)
+		fmt.Printf("DEBUG: comparePassword - Hash that failed: %s\n", hashedPassword)
 		return false
 	}
 	

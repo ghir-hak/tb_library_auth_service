@@ -32,6 +32,9 @@ func getUserByID(id string) (*User, error) {
 		return nil, fmt.Errorf("failed to unmarshal user: %w", err)
 	}
 
+	fmt.Printf("DEBUG: getUserByID - Retrieved password hash (len: %d): %s\n", 
+		len(storageUser.Password), storageUser.Password)
+
 	user := User{
 		ID:       storageUser.ID,
 		Username: storageUser.Username,
@@ -74,6 +77,8 @@ func getUserByUsername(username string) (*User, error) {
 
 	fmt.Printf("DEBUG: Unmarshaled user - ID: %s, Username: %s, Email: %s, Password len: %d\n",
 		storageUser.ID, storageUser.Username, storageUser.Email, len(storageUser.Password))
+	fmt.Printf("DEBUG: Retrieved password hash: %s\n", storageUser.Password)
+	fmt.Printf("DEBUG: Retrieved password hash bytes (hex): %x\n", []byte(storageUser.Password))
 
 	user := User{
 		ID:       storageUser.ID,
@@ -137,6 +142,9 @@ func saveUser(user User) error {
 
 	fmt.Printf("DEBUG: Marshaled user data length: %d bytes\n", len(userData))
 	fmt.Printf("DEBUG: Marshaled data includes password: %v\n", strings.Contains(string(userData), "password"))
+	fmt.Printf("DEBUG: saveUser - Storing password hash (len: %d): %s\n", 
+		len(storageUser.Password), storageUser.Password)
+	fmt.Printf("DEBUG: saveUser - Password hash bytes (hex): %x\n", []byte(storageUser.Password))
 
 	// Store by username (primary - for login)
 	usernameKey := fmt.Sprintf("%s%s", usersPrefix, user.Username)
