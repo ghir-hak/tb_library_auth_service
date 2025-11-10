@@ -3,6 +3,7 @@ package lib
 import (
 	"encoding/json"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/taubyte/go-sdk/event"
@@ -46,7 +47,11 @@ func register(e event.Event) uint32 {
 		return sendErrorResponse(h, err.Error(), 400)
 	}
 
-	// Validate required fields
+	// Trim and validate required fields
+	req.Username = strings.TrimSpace(req.Username)
+	req.Email = strings.TrimSpace(req.Email)
+	req.Password = strings.TrimSpace(req.Password)
+	
 	if req.Username == "" || req.Email == "" || req.Password == "" {
 		return sendErrorResponse(h, "username, email, and password are required", 400)
 	}
@@ -60,7 +65,7 @@ func register(e event.Event) uint32 {
 		return sendErrorResponse(h, message, 409)
 	}
 
-	// Hash password
+	// Hash password (already trimmed above)
 	hashedPassword, err := hashPassword(req.Password)
 	if err != nil {
 		return sendErrorResponse(h, "failed to hash password", 500)
@@ -110,7 +115,10 @@ func login(e event.Event) uint32 {
 		return sendErrorResponse(h, err.Error(), 400)
 	}
 
-	// Validate required fields
+	// Trim and validate required fields
+	req.Username = strings.TrimSpace(req.Username)
+	req.Password = strings.TrimSpace(req.Password)
+	
 	if req.Username == "" || req.Password == "" {
 		return sendErrorResponse(h, "username and password are required", 400)
 	}
@@ -129,7 +137,7 @@ func login(e event.Event) uint32 {
 	fmt.Printf("DEBUG: Comparing password (hashed len=%d, plain len=%d)\n", len(user.Password), len(req.Password))
 	if !comparePassword(user.Password, req.Password) {
 		fmt.Printf("DEBUG: Password comparison failed\n")
-		return sendErrorResponse(h, "invalid credentials - password mismatch", 401)
+		return sendErrorResponse(h, "invalid credentials - password mismatch 1", 401)
 	}
 	fmt.Printf("DEBUG: Password verified successfully\n")
 
@@ -212,6 +220,10 @@ func updateUser(e event.Event) uint32 {
 
 	// Update fields if provided
 	if req.Email != "" {
+		req.Email = strings.TrimSpace(req.Email)
+		if req.Email == "" {
+			return sendErrorResponse(h, "email cannot be empty", 400)
+		}
 		// Check if email already exists (and not for this user)
 		existingUser, err := getUserByEmail(req.Email)
 		if err == nil && existingUser.ID != userID {
@@ -221,6 +233,10 @@ func updateUser(e event.Event) uint32 {
 	}
 
 	if req.Password != "" {
+		req.Password = strings.TrimSpace(req.Password)
+		if req.Password == "" {
+			return sendErrorResponse(h, "password cannot be empty", 400)
+		}
 		hashedPassword, err := hashPassword(req.Password)
 		if err != nil {
 			return sendErrorResponse(h, "failed to hash password", 500)

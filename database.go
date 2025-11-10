@@ -85,14 +85,6 @@ func getUserByUsername(username string) (*User, error) {
 	return &user, nil
 }
 
-// min helper function
-func min(a, b int) int {
-	if a < b {
-		return a
-	}
-	return b
-}
-
 // getUserByEmail retrieves a user by email from the database
 // SIMPLE: Read email mapping to get username, then read user
 func getUserByEmail(email string) (*User, error) {

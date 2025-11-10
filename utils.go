@@ -59,28 +59,57 @@ func hashPassword(password string) (string, error) {
 	return string(bytes), nil
 }
 
+// min returns the minimum of two integers
+func min(a, b int) int {
+	if a < b {
+		return a
+	}
+	return b
+}
+
 // comparePassword compares a password with a hash
 func comparePassword(hashedPassword, password string) bool {
-	fmt.Printf("DEBUG: comparePassword - hashed len: %d, plain len: %d\n", len(hashedPassword), len(password))
-	
-	// Trim whitespace
+	// Trim whitespace from both inputs to handle any encoding/storage issues
 	hashedPassword = strings.TrimSpace(hashedPassword)
+	password = strings.TrimSpace(password)
 	
+	// Validate inputs
 	if len(hashedPassword) == 0 {
-		fmt.Printf("DEBUG: Hashed password is empty after trimming!\n")
+		fmt.Printf("DEBUG: comparePassword - Hashed password is empty!\n")
 		return false
 	}
 	
-	// Show hash prefix for debugging (first 10 chars)
-	fmt.Printf("DEBUG: Hash prefix: %s\n", hashedPassword[:min(10, len(hashedPassword))])
+	if len(password) == 0 {
+		fmt.Printf("DEBUG: comparePassword - Plain password is empty!\n")
+		return false
+	}
 	
-	// Let bcrypt handle the validation - it will return an error if format is invalid
+	// Validate bcrypt hash format - should start with $2a$, $2b$, or $2y$ and be 60 chars
+	if len(hashedPassword) != 60 {
+		fmt.Printf("DEBUG: comparePassword - Invalid hash length: %d (expected 60)\n", len(hashedPassword))
+		// Still try to compare in case it's a valid hash with different length (unlikely)
+	}
+	
+	// Validate hash prefix (bcrypt hashes start with $2a$, $2b$, or $2y$)
+	if !strings.HasPrefix(hashedPassword, "$2a$") && 
+	   !strings.HasPrefix(hashedPassword, "$2b$") && 
+	   !strings.HasPrefix(hashedPassword, "$2y$") {
+		fmt.Printf("DEBUG: comparePassword - Invalid hash format! Hash prefix: %s\n", 
+			hashedPassword[:min(10, len(hashedPassword))])
+		return false
+	}
+	
+	fmt.Printf("DEBUG: comparePassword - hashed len: %d, plain len: %d, hash prefix: %s\n", 
+		len(hashedPassword), len(password), hashedPassword[:min(7, len(hashedPassword))])
+	
+	// Compare using bcrypt - this is the authoritative check
 	err := bcrypt.CompareHashAndPassword([]byte(hashedPassword), []byte(password))
 	if err != nil {
-		fmt.Printf("DEBUG: Password comparison error: %v\n", err)
+		fmt.Printf("DEBUG: comparePassword - bcrypt comparison failed: %v\n", err)
 		return false
 	}
-	fmt.Printf("DEBUG: Password comparison succeeded\n")
+	
+	fmt.Printf("DEBUG: comparePassword - Password comparison succeeded\n")
 	return true
 }
 
