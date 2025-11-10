@@ -63,21 +63,18 @@ func hashPassword(password string) (string, error) {
 func comparePassword(hashedPassword, password string) bool {
 	fmt.Printf("DEBUG: comparePassword - hashed len: %d, plain len: %d\n", len(hashedPassword), len(password))
 	
-	// Validate hash format
-	if len(hashedPassword) == 0 {
-		fmt.Printf("DEBUG: Hashed password is empty!\n")
-		return false
-	}
-	
-	// Check if it's a valid bcrypt hash (should start with $2a$, $2b$, or $2y$)
-	if len(hashedPassword) < 7 || (hashedPassword[:4] != "$2a$" && hashedPassword[:4] != "$2b$" && hashedPassword[:4] != "$2y$") {
-		fmt.Printf("DEBUG: Invalid bcrypt hash format! Hash starts with: %s\n", hashedPassword[:min(10, len(hashedPassword))])
-		return false
-	}
-	
-	// Trim any potential whitespace
+	// Trim whitespace
 	hashedPassword = strings.TrimSpace(hashedPassword)
 	
+	if len(hashedPassword) == 0 {
+		fmt.Printf("DEBUG: Hashed password is empty after trimming!\n")
+		return false
+	}
+	
+	// Show hash prefix for debugging (first 10 chars)
+	fmt.Printf("DEBUG: Hash prefix: %s\n", hashedPassword[:min(10, len(hashedPassword))])
+	
+	// Let bcrypt handle the validation - it will return an error if format is invalid
 	err := bcrypt.CompareHashAndPassword([]byte(hashedPassword), []byte(password))
 	if err != nil {
 		fmt.Printf("DEBUG: Password comparison error: %v\n", err)
