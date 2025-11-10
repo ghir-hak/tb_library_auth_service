@@ -114,8 +114,7 @@ func login(e event.Event) uint32 {
 	// Get user by username
 	user, err := getUserByUsername(req.Username)
 	if err != nil {
-		// Return error (will show "user not found" or actual error)
-		return sendErrorResponse(h, "invalid credentials", 401)
+		return sendErrorResponse(h, fmt.Sprintf("getUserByUsername failed: %v", err), 401)
 	}
 
 	// Verify password
