@@ -1,8 +1,10 @@
 package lib
 
 import (
+	"bytes"
 	"encoding/json"
 	"fmt"
+	"io"
 	"strings"
 	"time"
 
@@ -47,10 +49,25 @@ func register(e event.Event) uint32 {
 		return sendErrorResponse(h, err.Error(), 400)
 	}
 
+	// Debug: Show raw password before trimming
+	fmt.Printf("DEBUG: Register - Raw password from JSON (len=%d): %q\n", len(req.Password), req.Password)
+	fmt.Printf("DEBUG: Register - Raw password bytes (hex): %x\n", []byte(req.Password))
+	fmt.Printf("DEBUG: Register - Raw password bytes (decimal): %v\n", []byte(req.Password))
+
 	// Trim and validate required fields
 	req.Username = strings.TrimSpace(req.Username)
 	req.Email = strings.TrimSpace(req.Email)
+	originalPassword := req.Password
 	req.Password = strings.TrimSpace(req.Password)
+	
+	// Debug: Show password after trimming
+	if originalPassword != req.Password {
+		fmt.Printf("DEBUG: Register - Password was trimmed! Before: %q (len=%d), After: %q (len=%d)\n", 
+			originalPassword, len(originalPassword), req.Password, len(req.Password))
+		fmt.Printf("DEBUG: Register - Trimmed password bytes (hex): %x\n", []byte(req.Password))
+	} else {
+		fmt.Printf("DEBUG: Register - Password unchanged after trim: %q (len=%d)\n", req.Password, len(req.Password))
+	}
 	
 	if req.Username == "" || req.Email == "" || req.Password == "" {
 		return sendErrorResponse(h, "username, email, and password are required", 400)
@@ -66,10 +83,13 @@ func register(e event.Event) uint32 {
 	}
 
 	// Hash password (already trimmed above)
+	fmt.Printf("DEBUG: Register - About to hash password: %q (len=%d, bytes: %x)\n", 
+		req.Password, len(req.Password), []byte(req.Password))
 	hashedPassword, err := hashPassword(req.Password)
 	if err != nil {
 		return sendErrorResponse(h, "failed to hash password", 500)
 	}
+	fmt.Printf("DEBUG: Register - Password hashed successfully, hash: %s\n", hashedPassword)
 
 	// Create user
 	userID := fmt.Sprintf("%d", time.Now().UnixNano())
@@ -107,17 +127,44 @@ func login(e event.Event) uint32 {
 	}
 	setCORSHeaders(h)
 
-	reqDec := json.NewDecoder(h.Body())
+	// Read raw body for debugging
+	bodyData, err := io.ReadAll(h.Body())
+	if err != nil {
+		fmt.Printf("DEBUG: Login - Error reading body: %v\n", err)
+		return sendErrorResponse(h, "failed to read request body", 400)
+	}
 	defer h.Body().Close()
+	
+	fmt.Printf("DEBUG: Login - Raw HTTP body: %s\n", string(bodyData))
+	fmt.Printf("DEBUG: Login - Raw HTTP body bytes (hex): %x\n", bodyData)
+	fmt.Printf("DEBUG: Login - Raw HTTP body length: %d bytes\n", len(bodyData))
 
+	// Create decoder from body data
+	reqDec := json.NewDecoder(bytes.NewReader(bodyData))
 	var req LoginRequest
 	if err := reqDec.Decode(&req); err != nil {
+		fmt.Printf("DEBUG: Login - JSON decode error: %v\n", err)
 		return sendErrorResponse(h, err.Error(), 400)
 	}
 
+	// Debug: Show raw password before trimming
+	fmt.Printf("DEBUG: Login - Raw password from JSON (len=%d): %q\n", len(req.Password), req.Password)
+	fmt.Printf("DEBUG: Login - Raw password bytes (hex): %x\n", []byte(req.Password))
+	fmt.Printf("DEBUG: Login - Raw password bytes (decimal): %v\n", []byte(req.Password))
+
 	// Trim and validate required fields
 	req.Username = strings.TrimSpace(req.Username)
+	originalPassword := req.Password
 	req.Password = strings.TrimSpace(req.Password)
+	
+	// Debug: Show password after trimming
+	if originalPassword != req.Password {
+		fmt.Printf("DEBUG: Login - Password was trimmed! Before: %q (len=%d), After: %q (len=%d)\n", 
+			originalPassword, len(originalPassword), req.Password, len(req.Password))
+		fmt.Printf("DEBUG: Login - Trimmed password bytes (hex): %x\n", []byte(req.Password))
+	} else {
+		fmt.Printf("DEBUG: Login - Password unchanged after trim: %q (len=%d)\n", req.Password, len(req.Password))
+	}
 	
 	if req.Username == "" || req.Password == "" {
 		return sendErrorResponse(h, "username and password are required", 400)
@@ -134,10 +181,12 @@ func login(e event.Event) uint32 {
 		user.ID, user.Username, user.Email, len(user.Password))
 
 	// Verify password
-	fmt.Printf("DEBUG: Comparing password (hashed len=%d, plain len=%d)\n", len(user.Password), len(req.Password))
+	fmt.Printf("DEBUG: Login - About to compare - Hashed len=%d, Plain len=%d\n", len(user.Password), len(req.Password))
+	fmt.Printf("DEBUG: Login - Plain password being compared: %q\n", req.Password)
+	fmt.Printf("DEBUG: Login - Plain password bytes (hex): %x\n", []byte(req.Password))
 	if !comparePassword(user.Password, req.Password) {
 		fmt.Printf("DEBUG: Password comparison failed\n")
-		return sendErrorResponse(h, "invalid credentials - password mismatch 1", 401)
+		return sendErrorResponse(h, "invalid credentials - password mismatch", 401)
 	}
 	fmt.Printf("DEBUG: Password verified successfully\n")
 
